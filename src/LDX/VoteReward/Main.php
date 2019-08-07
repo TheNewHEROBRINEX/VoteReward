@@ -107,7 +107,7 @@ class Main extends PluginBase {
         return true;
     }
 
-    public function rewardPlayer($player, $multiplier) {
+    public function rewardPlayer($player, $multiplier){
         if(!$player instanceof Player) {
             return;
         }
@@ -116,44 +116,47 @@ class Main extends PluginBase {
             return;
         }
         $clones = [];
-        foreach($this->items as $item) {
+        foreach ($this->items as $item) {
             $clones[] = clone $item;
         }
-        foreach($clones as $item) {
-            $item->setCount($item->getCount() * $multiplier);
-            $player->getInventory()->addItem($item);
-        }
-        foreach($this->commands as $command) {
-            $this->getServer()->dispatchCommand(new ConsoleCommandSender, str_replace([
-                "{USERNAME}",
-                "{NICKNAME}",
-                "{X}",
-                "{Y}",
-                "{Y1}",
-                "{Z}"
-            ], [
-                $player->getName(),
-                $player->getDisplayName(),
-                $player->getX(),
-                $player->getY(),
-                $player->getY() + 1,
-                $player->getZ()
-            ], Utils::translateColors($command)));
-        }
-        if(trim($this->message) != "") {
-            $message = str_replace([
-                "{USERNAME}",
-                "{NICKNAME}"
-            ], [
-                $player->getName(),
-                $player->getDisplayName()
-            ], Utils::translateColors($this->message));
-            foreach($this->getServer()->getOnlinePlayers() as $p) {
-                $p->sendMessage($message);
+        $ev = new PlayerRewardEvent($player, $clones, $multiplier, $this->commands, $this->message);
+        $ev->call();
+        if(!$ev->isCancelled()) {
+            foreach ($ev->getItems() as $item) {
+                $item->setCount($item->getCount() * $ev->getMultiplier());
+                $player->getInventory()->addItem($item);
             }
-            $this->getServer()->getLogger()->info($message);
+            foreach ($ev->getCommands() as $command) {
+                $this->getServer()->dispatchCommand(new ConsoleCommandSender, str_replace([
+                    "{USERNAME}",
+                    "{NICKNAME}",
+                    "{X}",
+                    "{Y}",
+                    "{Y1}",
+                    "{Z}"
+                ], [
+                    $player->getName(),
+                    $player->getDisplayName(),
+                    $player->getX(),
+                    $player->getY(),
+                    $player->getY() + 1,
+                    $player->getZ()
+                ], Utils::translateColors($command)));
+            }
+            if(trim($ev->getMessage()) != "") {
+                $message = str_replace([
+                    "{USERNAME}",
+                    "{NICKNAME}"
+                ], [
+                    $player->getName(),
+                    $player->getDisplayName()
+                ], Utils::translateColors($ev->getMessage()));
+                foreach ($this->getServer()->getOnlinePlayers() as $p) {
+                    $p->sendMessage($message);
+                }
+                $this->getServer()->getLogger()->info($message);
+            }
+            $player->sendMessage("[VoteReward] You voted on $multiplier server list" . ($multiplier == 1 ? "" : "s") . "!");
         }
-        $player->sendMessage("[VoteReward] You voted on $multiplier server list" . ($multiplier == 1 ? "" : "s") . "!");
     }
-
 }
